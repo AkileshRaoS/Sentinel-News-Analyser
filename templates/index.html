@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .analysis-container {
+            max-height: 700px;
+            overflow-y: auto;
+        }
+        
+        .plot-container img {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal-content {
+            position: relative;
+            background: white;
+            margin: 2rem auto;
+            padding: 2rem;
+            width: 90%;
+            max-width: 1200px;
+            min-height: 90vh;
+            border-radius: 1rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .modal.show {
+            display: block;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Print styles */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            
+            .modal-content {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                min-height: auto;
+                box-shadow: none;
+            }
+
+            .prose {
+                max-width: none !important;
+            }
+
+            body {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            #modalContent {
+                height: auto !important;
+                overflow: visible !important;
+            }
+
+            * {
+                break-inside: auto !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Loading Overlay -->
+    <div class="loading" id="loadingOverlay">
+        <div class="text-center text-white">
+            <div class="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-white mb-4"></div>
+            <p class="text-xl">Analyzing articles...</p>
+        </div>
+    </div>
+    
+<!-- 
+    <div class="loading" id="loadingOverlay1">
+        <div class="text-center text-white">
+            <div class="flex justify-center space-x-2">
+                <div class="w-2 h-6 bg-white animate-pulse"></div>
+                <div class="w-2 h-6 bg-white animate-pulse delay-200"></div>
+                <div class="w-2 h-6 bg-white animate-pulse delay-400"></div>
+            </div>
+            <p class="text-xl">Rewriting articles...</p>
+        </div>
+    </div>
+     -->
+     <div class="loading" id="loadingOverlay1">
+        <div class="text-center text-white">
+            <div class="animate-pulse rounded-full h-32 w-32 bg-white mb-4"></div>
+            <p class="text-xl">Rewriting articles...</p>
+        </div>
+    </div>
+
+    <!-- Full-screen Modal -->
+    <div id="fullscreenModal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-4">
+                    <button onclick="goBackToAnalysis()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2 no-print">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to Analysis
+                    </button>
+                    <h2 class="text-3xl font-bold text-gray-800">Detailed Analysis</h2>
+                </div>
+                <div class="flex gap-4">
+                    <button onclick="printFullAnalysis()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center gap-2 no-print">
+                        <i class="fas fa-print"></i>
+                        Print
+                    </button>
+                    <button onclick="closeModal()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors duration-200 flex items-center gap-2 no-print">
+                        <i class="fas fa-times"></i>
+                        Close
+                    </button>
+                </div>
+            </div>
+            <div id="modalContent" class="prose prose-lg max-w-none">
+                <!-- Content will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-6 shadow-lg no-print">
+        <div class="container mx-auto px-4">
+            <h1 class="text-3xl font-bold text-center mb-2">SENTINEL</h1>
+            <p class="text-center text-gray-200">Analyze news articles for sentiment and bias using AI</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- Search Form -->
+        <div class="max-w-2xl mx-auto mb-8 no-print">
+            <form method="POST" class="bg-white rounded-lg shadow-md p-6" id="searchForm">
+                <div class="mb-4">
+                    <label for="query" class="block text-gray-700 font-medium mb-2">Search News Topics</label>
+                    <div class="flex gap-4">
+                        <input type="text" name="query" id="query" required
+                            class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter a news topic...">
+                        <button type="submit"
+                            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2">
+                            <i class="fas fa-search"></i>
+                            Analyze
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="max-w-2xl mx-auto mb-8 no-print">
+            <form method="GET" action="/" class="bg-white rounded-lg shadow-md p-6" id="Link">
+                <div class="mb-4">
+                    <label for="link" class="block text-gray-700 font-medium mb-2">Search via Link</label>
+                    <div class="flex gap-4">
+                        <input type="text" name="link" id="link" required
+                            class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter a news article link...">
+                        <button type="submit"
+                            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2">
+                            <i class="fas fa-search"></i>
+                            Analyze
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        {% if analysis_text %}
+        <!-- Results Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in">
+            <!-- Analysis Text -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">Analysis Results</h2>
+                    <button onclick="showFullscreen()" 
+                            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2 no-print">
+                        <i class="fas fa-expand"></i>
+                        Full Screen
+                    </button>
+                </div>
+                <div class="analysis-container prose prose-blue" id="analysisContent">
+                    {{ analysis_text|safe }}
+                </div>
+                
+                <!-- Rewrite Form -->
+                <form method="POST" action="{{ url_for('rewrite') }}" class="mt-6 no-print" id="Rewrite">
+                    <input type="hidden" name="analysis_text" value="{{ analysis_text }}">
+                    <button type="submit"
+                        class="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-pen"></i>
+                        Rewrite Articles Neutrally
+                    </button>
+                </form>
+            </div>
+
+            <!-- Visualizations -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-2xl font-bold mb-4 text-gray-800">Visualizations</h2>
+                {% if plot_path %}
+                <div class="plot-container">
+                    <img src="{{ plot_path }}" alt="Analysis Plots" class="rounded-lg">
+                </div>
+                {% endif %}
+                
+                {% if code_output %}
+                <div class="mt-4 bg-gray-100 p-4 rounded-lg">
+                    <h3 class="font-semibold text-gray-700 mb-2">Processing Output:</h3>
+                    <pre class="text-sm text-gray-600">{{ code_output }}</pre>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if rewritten_text %}
+        <!-- Rewritten Article -->
+        <div class="mt-8 bg-white rounded-lg shadow-md p-6 fade-in">
+            <h2 class="text-2xl font-bold mb-4 text-gray-800">Rewritten Article</h2>
+            <div class="prose prose-blue max-w-none">
+                {{ rewritten_text|safe }}
+            </div>
+        </div>
+        {% endif %}
+    </main>
+
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-6 mt-12 no-print">
+        <div class="container mx-auto px-4 text-center">
+            <p>&copy; 2025 SENTINEL. Powered by NewsAPI and Google Gemini.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Loading overlay handling
+        document.getElementById('searchForm').addEventListener('submit', function() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        });
+        document.getElementById('Link').addEventListener('submit', function() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        });
+
+        document.getElementById('Rewrite').addEventListener('submit', function() {
+            document.getElementById('loadingOverlay1').style.display = 'flex';
+        });
+        // Full-screen modal functions
+        function showFullscreen() {
+            const modal = document.getElementById('fullscreenModal');
+            const content = document.getElementById('analysisContent').innerHTML;
+            document.getElementById('modalContent').innerHTML = content;
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('fullscreenModal');
+            modal.classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // Back button function
+        function goBackToAnalysis() {
+            closeModal();
+            document.querySelector('.analysis-container').scrollIntoView({ 
+                behavior: 'smooth' 
+            });
+        }
+
+        // Updated print function
+        function printFullAnalysis() {
+            const modalContent = document.getElementById('modalContent');
+            const originalContent = document.body.innerHTML;
+            const printContent = modalContent.innerHTML;
+            
+            // Create a temporary container for print content
+            const printContainer = document.createElement('div');
+            printContainer.innerHTML = printContent;
+            printContainer.style.width = '100%';
+            printContainer.style.margin = '0';
+            printContainer.style.padding = '20px';
+            
+            // Replace body content temporarily
+            document.body.innerHTML = printContainer.outerHTML;
+            
+            // Print
+            window.print();
+            
+            // Restore original content
+            document.body.innerHTML = originalContent;
+            
+            // Reinitialize event listeners
+            initializeEventListeners();
+        }
+
+        // Function to reinitialize event listeners
+        function initializeEventListeners() {
+            document.getElementById('searchForm').addEventListener('submit', function() {
+                document.getElementById('loadingOverlay').style.display = 'flex';
+            });
+            document.getElementById('Link').addEventListener('submit', function() {
+                document.getElementById('loadingOverlay').style.display = 'flex';
+            });
+            document.getElementById('Rewrite').addEventListener('submit', function() {
+                document.getElementById('loadingOverlay1').style.display = 'flex';
+            });
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+            });
+
+            document.getElementById('fullscreenModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeModal();
+                }
+            });
+        }
+
+        // Initialize event listeners
+        initializeEventListeners();
+    </script>
+
+
+
+</body>
+</html>
